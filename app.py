@@ -289,7 +289,7 @@ def on_tab_change(event):
 def build_tabs():
     """
     Each folder in BASE_DIR is turned into a tab in the ttk.Notebook.
-    In that tab, we create sub-frames for 'white', 'brown', and 'other' labels.
+    In that tab, we create sub-frames for 'white', 'brown', 'other' labels, and days buttons.
     """
     folders = [
         f for f in os.listdir(BASE_DIR)
@@ -306,12 +306,36 @@ def build_tabs():
         # Map the frame object to the folder path
         tab_folders[folder_tab] = folder_path
 
-        # Create a canvas and scrollbar for the tab
+        # Configure grid layout for the folder_tab
+        folder_tab.grid_rowconfigure(0, weight=1)
+        folder_tab.grid_columnconfigure(0, weight=1)  # Canvas column
+        folder_tab.grid_columnconfigure(1, weight=0)  # Scrollbar column
+        folder_tab.grid_columnconfigure(2, weight=0)  # Days frame column
+
+        # Create a canvas and scrollbar
         canvas = tk.Canvas(folder_tab)
         scrollbar = ttk.Scrollbar(folder_tab, orient="vertical", command=canvas.yview)
         scrollable_frame = ttk.Frame(canvas)
 
-        # Configure the canvas to update the scroll region when the frame size changes
+        # Attach scrollable frame to canvas
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        # Place canvas and scrollbar using grid
+        canvas.grid(row=0, column=0, sticky="nsew")
+        scrollbar.grid(row=0, column=1, sticky="ns")
+
+        # Create days frame on the right side of the tab
+        days_frame = tk.Frame(folder_tab, padx=5, pady=5)
+        days_frame.grid(row=0, column=2, sticky="nsew")
+
+        # Add day buttons to the days_frame
+        days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        for day in days:
+            btn = tk.Button(days_frame, text=day, width=12)
+            btn.pack(side="top", fill="x", pady=2)
+
+        # Configure the canvas to update scroll region
         scrollable_frame.bind(
             "<Configure>",
             lambda e, canvas=canvas: canvas.configure(
@@ -319,15 +343,7 @@ def build_tabs():
             )
         )
 
-        # Attach the scrollable frame to the canvas
-        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
-        canvas.configure(yscrollcommand=scrollbar.set)
-
-        # Pack the canvas and scrollbar
-        canvas.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
-
-        # Create sub-frames inside the scrollable_frame for White, Brown, Other
+        # Create sub-frames inside the scrollable_frame
         white_frame = tk.Frame(scrollable_frame, bd=0, relief="flat")
         brown_frame = tk.Frame(scrollable_frame, bd=0, relief="flat")
         other_frame = tk.Frame(scrollable_frame, bd=0, relief="flat")
@@ -416,7 +432,7 @@ def main():
     
     root = tk.Tk()
     root.title("Butty Printer 3000")
-    root.geometry("450x910")
+    root.geometry("800x910")  # Increased width to accommodate days frame
     
     # Create the Notebook
     notebook = ttk.Notebook(root)
