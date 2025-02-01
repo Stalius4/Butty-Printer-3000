@@ -4,7 +4,7 @@ from tkinter import ttk, messagebox, simpledialog
 import win32com.client
 import re
 import csv
-
+from ttkthemes import ThemedTk
 # ------------------------------------------------------------------------
 # Global variables
 # ------------------------------------------------------------------------
@@ -401,7 +401,7 @@ def build_tabs():
         # Add day buttons to the days_frame with command to populate CSV data
         days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Reset"]
         for day in days:
-            btn = tk.Button(days_frame, text=day, width=12,
+            btn = ttk.Button(days_frame, text=day, width=12,
                             command=lambda d=day, fp=folder_path: populate_day(d, fp))
             btn.pack(side="top", fill="x", pady=2)
 
@@ -439,7 +439,7 @@ def build_tabs():
                 tk.Label(row_frame, text=os.path.splitext(lbl_file)[0],
                          width=25, anchor="w").pack(side="left", padx=0, pady=0)
 
-                entry = tk.Entry(row_frame, width=5)
+                entry = ttk.Entry(row_frame, width=3)
                 entry.pack(side="left", padx=0, pady=0)
 
                 # Set navigation attributes
@@ -476,12 +476,12 @@ def build_tabs():
             brown_row_index = 0  # row counter for brown fields
             for lbl_file in files:
                 row_frame = tk.Frame(brown_frame)
-                row_frame.pack(anchor="w", padx=2, pady=1.3)
+                row_frame.pack(anchor="w", padx=2)
 
                 bottom_border = tk.Frame(row_frame, bg="grey", height=0.5)
                 bottom_border.pack(fill="x", side="bottom")
 
-                entry = tk.Entry(row_frame, width=5)
+                entry = ttk.Entry(row_frame, width=3)
                 entry.insert(0, "")
                 entry.pack(side="left")
 
@@ -518,7 +518,7 @@ def build_tabs():
                 tk.Label(row_frame, text=os.path.splitext(lbl_file)[0],
                          width=15, anchor="w").pack(side="left")
 
-                entry = tk.Entry(row_frame, width=5)
+                entry = ttk.Entry(row_frame, width=3)
                 entry.insert(0, "")
                 entry.pack(side="left")
                 entry.bind("<KeyRelease>", entry_update)
@@ -531,34 +531,37 @@ def build_tabs():
 # ------------------------------------------------------------------------
 def main():
     global root, notebook, price_label, current_tab_total_label
-    root = tk.Tk()
+    # Import and use ThemedTk from ttkthemes
+   
+    root = ThemedTk(theme="clearlooks")  # Change "arc" to your preferred theme
     root.title("Butty Printer 3000")
     root.geometry("550x810")  # Adjust window size as needed
-    
-    # Create the Notebook
+
+    # Create the Notebook (ttk.Notebook is already themed)
     notebook = ttk.Notebook(root)
     notebook.grid(row=0, column=0, columnspan=3, sticky="nsew")
-    
+
     # Frame for the controls (Set Price, Print, etc.) at the bottom
     controls = tk.Frame(root)
     controls.grid(row=1, column=0, columnspan=3, sticky="ew")
-    
-    price_label = tk.Label(controls, text=f"Current Price: {current_price}",
-                           font=("Arial", 10, "bold"))
+
+    # You can also change tk.Label/tk.Button to ttk versions if desired:
+    price_label = ttk.Label(controls, text=f"Current Price: {current_price}",
+                            font=("Arial", 10, "bold"))
     price_label.pack(side="left", padx=5)
-    
-    tk.Button(controls, text="Set Price", font="Calibri 14", command=set_price).pack(side="left", padx=5, pady=3)
-    tk.Button(controls, text="Print Labels", font="Calibri 14", command=print_labels).pack(side="left", padx=5, pady=3)
-    
-    current_tab_total_label = tk.Label(controls, text="Total: 0", font=("Arial", 10, "bold"))
+
+    ttk.Button(controls, text="Set Price", command=set_price).pack(side="left", padx=5, pady=3)
+    ttk.Button(controls, text="Print Labels", command=print_labels).pack(side="left", padx=5, pady=3)
+
+    current_tab_total_label = ttk.Label(controls, text="Total: 0", font=("Arial", 10, "bold"))
     current_tab_total_label.pack(side="left", padx=5)
-    
+
     root.columnconfigure(0, weight=1)
     root.rowconfigure(0, weight=1)
-    
+
     build_tabs()
     notebook.bind("<<NotebookTabChanged>>", on_tab_change)
-    
+
     # Center the window on the screen
     root.update_idletasks()
     window_width = root.winfo_width()
@@ -568,8 +571,9 @@ def main():
     x = (screen_width - window_width) // 2
     y = (screen_height - window_height) // 2
     root.geometry(f"+{x}+{y}")
-    
+
     root.mainloop()
+
 
 if __name__ == "__main__":
     main()
