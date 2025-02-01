@@ -8,7 +8,7 @@ import csv  # NEW: For CSV file reading
 # ------------------------------------------------------------------------
 # Global variables
 # ------------------------------------------------------------------------
-BASE_DIR = r"C:\Users\Deivydas\Desktop\components\labe"  # Replace with your actual path
+BASE_DIR = r"C:\Users\Deivydas\Desktop\label_printer1"  # Replace with your actual path
 current_price = "£0.00"
 CSV_FILE = "Spalding_numbers.csv"  # NEW: Path to your CSV file
 
@@ -246,7 +246,7 @@ def update_tab_total_display(folder_path):
                 total += int(value)
             except ValueError:
                 pass
-    current_tab_total_label.config(text=f"Tab Total: {total}")
+    current_tab_total_label.config(text=f"Total: {total}")
 
 def entry_update(event):
     """
@@ -371,7 +371,7 @@ def build_tabs():
         days_frame.grid(row=0, column=2, sticky="nsew")
 
         # Add day buttons to the days_frame with a command to populate CSV data
-        days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Reset"]
         for day in days:
             # Using a lambda with default arguments to capture the current day and folder_path
             btn = tk.Button(days_frame, text=day, width=12,
@@ -475,7 +475,7 @@ def main():
     
     root = tk.Tk()
     root.title("Butty Printer 3000")
-    root.geometry("800x910")  # Increased width to accommodate days frame
+    root.geometry("550x810")  # Increased width to accommodate days frame
     
     # Create the Notebook
     notebook = ttk.Notebook(root)
