@@ -3,14 +3,14 @@ import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog
 import win32com.client
 import re
-import csv  # NEW: For CSV file reading
+import csv
 
 # ------------------------------------------------------------------------
 # Global variables
 # ------------------------------------------------------------------------
 BASE_DIR = r"C:\Users\Deivydas\Desktop\label_printer1"  # Replace with your actual path
 current_price = "£0.00"
-CSV_FILE = "Spalding_numbers.csv"  # NEW: Path to your CSV file
+CSV_FILE = "Spalding_numbers.csv"  # Path to your CSV file
 
 # This dictionary maps the actual ttk.Frame object (each tab) to the folder path
 tab_folders = {}
@@ -18,6 +18,9 @@ tab_folders = {}
 # We'll store references to our file widgets keyed by:
 # ( folder_path, (folder_type, filename) ) -> ( actual_subfolder, entry_widget )
 file_widgets = {}
+
+# Global dictionary to map (folder_path, row, col) -> entry widget for arrow-key navigation
+grid_entries = {}
 
 # We'll create the root and notebook at the bottom
 root = None
@@ -27,6 +30,9 @@ notebook = None
 current_tab_total_label = None
 price_label = None
 
+# ------------------------------------------------------------------------
+# Utility Functions
+# ------------------------------------------------------------------------
 def natural_key(text):
     """
     Splits the string into alpha and numeric parts and converts numeric parts to integers
@@ -60,16 +66,14 @@ def update_price_display():
     Uses the first label in the 'white' subfolder of the *current tab/folder*.
     """
     global current_price
-    
-    # notebook.select() gives a string widget name, so convert it to an object:
-    current_tab_name = notebook.select()          # e.g. ".!notebook.!frame2"
-    current_tab = notebook.nametowidget(current_tab_name)  # the actual ttk.Frame
+    current_tab_name = notebook.select()  # e.g. ".!notebook.!frame2"
+    current_tab = notebook.nametowidget(current_tab_name)
     folder_path = tab_folders.get(current_tab)
 
     if not folder_path:
         price_label.config(text="Current Price: £0.00")
         return
-    
+
     price = "£0.00"
     white_path = os.path.join(folder_path, "white")
     if os.path.isdir(white_path):
@@ -77,7 +81,7 @@ def update_price_display():
         if files:
             first_label = os.path.join(white_path, files[0])
             price = get_price_from_label(first_label) or "£0.00"
-    
+
     current_price = price
     price_label.config(text=f"Current Price: {current_price}")
 
@@ -90,11 +94,10 @@ def set_price():
     under the currently selected tab (folder).
     """
     global current_price
-    
     current_tab_name = notebook.select()
     current_tab = notebook.nametowidget(current_tab_name)
     folder_path = tab_folders.get(current_tab)
-    
+
     if not folder_path:
         messagebox.showinfo("Info", "No folder selected.")
         return
@@ -169,8 +172,6 @@ def set_price():
         progress_window.update()
 
     progress_window.destroy()
-
-    # Refresh price display
     update_price_display()
 
 # ------------------------------------------------------------------------
@@ -205,7 +206,6 @@ def print_labels():
 
     try:
         bpac = win32com.client.Dispatch("bpac.Document")
-
         # 0 = continuous/no cut, 1 = cut at end, 2 = cut each label
         if not bpac.StartPrint("", 0):
             messagebox.showerror("Error", "Failed to start printing.")
@@ -236,7 +236,7 @@ def print_labels():
 def update_tab_total_display(folder_path):
     """
     Recalculate and display the sum for the specified folder_path
-    in the controls frame label: current_tab_total_label
+    in the controls frame label: current_tab_total_label.
     """
     total = 0
     for (fpath, key_tuple), (actual_subfolder, entry_widget) in file_widgets.items():
@@ -253,21 +253,17 @@ def entry_update(event):
     Event callback to update the sum *only* for the
     currently selected folder tab when the user types in an Entry.
     """
-    # Figure out the current folder path (the tab that's selected)
     current_tab_name = notebook.select()
     current_tab = notebook.nametowidget(current_tab_name)
     current_folder_path = tab_folders.get(current_tab)
 
-    # Determine which folder path the changed entry belongs to
     changed_entry = event.widget
     changed_entry_folder_path = None
-
     for (fpath, key_tuple), (actual_subfolder, entry_widget) in file_widgets.items():
         if entry_widget == changed_entry:
             changed_entry_folder_path = fpath
             break
 
-    # If the changed entry belongs to the *current* tab, update that tab's total
     if changed_entry_folder_path == current_folder_path:
         update_tab_total_display(current_folder_path)
 
@@ -277,8 +273,6 @@ def on_tab_change(event):
     then recalc the total for the newly selected tab.
     """
     update_price_display()
-
-    # Figure out which tab is now active
     current_tab_name = notebook.select()
     current_tab = notebook.nametowidget(current_tab_name)
     folder_path = tab_folders.get(current_tab)
@@ -286,7 +280,7 @@ def on_tab_change(event):
         update_tab_total_display(folder_path)
 
 # ------------------------------------------------------------------------
-# NEW: Populate entries from CSV when a day button is pressed
+# Populate entries from CSV when a day button is pressed
 # ------------------------------------------------------------------------
 def populate_day(day, folder_path):
     """
@@ -308,16 +302,13 @@ def populate_day(day, folder_path):
         messagebox.showerror("Error", f"Could not read CSV file: {e}")
         return
 
-    # Loop through all file widgets in the current folder
     for (fpath, key_tuple), (actual_subfolder, entry_widget) in file_widgets.items():
         if fpath == folder_path:
             folder_type, filename = key_tuple
-            # Only update white and brown labels (skip 'other')
             if folder_type in ("white", "brown"):
                 base_name = os.path.splitext(filename)[0]
                 if base_name in data:
                     csv_row = data[base_name]
-                    # Determine the correct column name based on the day and label type
                     col_name = f"{day} {folder_type}"  # e.g., "Monday white"
                     value = csv_row.get(col_name, "")
                     entry_widget.delete(0, tk.END)
@@ -325,17 +316,45 @@ def populate_day(day, folder_path):
     update_tab_total_display(folder_path)
 
 # ------------------------------------------------------------------------
+# Arrow Key Navigation Functionality
+# ------------------------------------------------------------------------
+def navigate_arrow(event):
+    """
+    Navigate among input fields using arrow keys.
+    Each entry is assumed to have attributes 'folder_path', 'row', and 'col'.
+    """
+    widget = event.widget
+    folder_path = getattr(widget, 'folder_path', None)
+    if folder_path is None:
+        return
+    row = getattr(widget, 'row', None)
+    col = getattr(widget, 'col', None)
+    if row is None or col is None:
+        return
+
+    new_row, new_col = row, col
+    if event.keysym == "Up":
+        new_row = row - 1
+    elif event.keysym == "Down":
+        new_row = row + 1
+    elif event.keysym == "Left":
+        new_col = col - 1
+    elif event.keysym == "Right":
+        new_col = col + 1
+
+    target = grid_entries.get((folder_path, new_row, new_col))
+    if target:
+        target.focus_set()
+
+# ------------------------------------------------------------------------
 # Build Tabs
 # ------------------------------------------------------------------------
 def build_tabs():
     """
     Each folder in BASE_DIR is turned into a tab in the ttk.Notebook.
-    In that tab, we create sub-frames for 'white', 'brown', 'other' labels, and days buttons.
+    In that tab, we create sub-frames for 'white', 'brown', and 'other' labels, along with day buttons.
     """
-    folders = [
-        f for f in os.listdir(BASE_DIR)
-        if os.path.isdir(os.path.join(BASE_DIR, f))
-    ]
+    folders = [f for f in os.listdir(BASE_DIR) if os.path.isdir(os.path.join(BASE_DIR, f))]
     
     for folder_name in folders:
         folder_path = os.path.join(BASE_DIR, folder_name)
@@ -343,8 +362,6 @@ def build_tabs():
         # Create a Frame for this folder tab
         folder_tab = ttk.Frame(notebook)
         notebook.add(folder_tab, text=folder_name)
-        
-        # Map the frame object to the folder path
         tab_folders[folder_tab] = folder_path
 
         # Configure grid layout for the folder_tab
@@ -370,10 +387,9 @@ def build_tabs():
         days_frame = tk.Frame(folder_tab, padx=5, pady=5)
         days_frame.grid(row=0, column=2, sticky="nsew")
 
-        # Add day buttons to the days_frame with a command to populate CSV data
+        # Add day buttons to the days_frame with command to populate CSV data
         days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Reset"]
         for day in days:
-            # Using a lambda with default arguments to capture the current day and folder_path
             btn = tk.Button(days_frame, text=day, width=12,
                             command=lambda d=day, fp=folder_path: populate_day(d, fp))
             btn.pack(side="top", fill="x", pady=2)
@@ -381,12 +397,10 @@ def build_tabs():
         # Configure the canvas to update scroll region
         scrollable_frame.bind(
             "<Configure>",
-            lambda e, canvas=canvas: canvas.configure(
-                scrollregion=canvas.bbox("all")
-            )
+            lambda e, canvas=canvas: canvas.configure(scrollregion=canvas.bbox("all"))
         )
 
-        # Create sub-frames inside the scrollable_frame
+        # Create sub-frames inside the scrollable_frame for white, brown, and other labels
         white_frame = tk.Frame(scrollable_frame, bd=0, relief="flat")
         brown_frame = tk.Frame(scrollable_frame, bd=0, relief="flat")
         other_frame = tk.Frame(scrollable_frame, bd=0, relief="flat")
@@ -395,12 +409,15 @@ def build_tabs():
         brown_frame.pack(side="left", fill="both", expand=True, padx=0, pady=0)
         other_frame.pack(side="left", fill="both", expand=True, padx=0, pady=0)
 
-        # WHITE
+        # ---------------------------
+        # WHITE LABELS
+        # ---------------------------
         tk.Label(white_frame, text="W", font=("Calibri", 10, "bold")).pack(anchor="e", padx=0, pady=0)
         white_path = os.path.join(folder_path, "white")
         if os.path.isdir(white_path):
             files = [f for f in os.listdir(white_path) if f.lower().endswith((".lbx", ".lbl"))]
             files = sorted(files, key=natural_key)
+            white_row_index = 0  # row counter for white fields
             for lbl_file in files:
                 row_frame = tk.Frame(white_frame)
                 row_frame.pack(anchor="w", padx=0, pady=0)
@@ -414,20 +431,38 @@ def build_tabs():
                 entry = tk.Entry(row_frame, width=5)
                 entry.pack(side="left", padx=0, pady=0)
 
-                # Bind key release to update the total sum for this tab if it's currently selected
+                # Set navigation attributes
+                entry.folder_path = folder_path
+                entry.row = white_row_index
+                entry.col = 0  # white column is 0
+
+                # Save widget in grid lookup for arrow navigation
+                grid_entries[(folder_path, white_row_index, 0)] = entry
+
+                # Bind arrow keys to navigation function
+                entry.bind("<Up>", navigate_arrow)
+                entry.bind("<Down>", navigate_arrow)
+                entry.bind("<Left>", navigate_arrow)
+                entry.bind("<Right>", navigate_arrow)
+
+                # Bind key release to update totals as before
                 entry.bind("<KeyRelease>", entry_update)
 
-                # Store in the file_widgets dictionary
+                # Store in file_widgets
                 file_widgets[(folder_path, ("white", lbl_file))] = (white_path, entry)
+                white_row_index += 1
         else:
             tk.Label(white_frame, text="No 'white' folder").pack(anchor="w")
 
-        # BROWN
+        # ---------------------------
+        # BROWN LABELS
+        # ---------------------------
         tk.Label(brown_frame, text="B", font=("Calibri", 10, "bold")).pack(anchor="w")
         brown_path = os.path.join(folder_path, "brown")
         if os.path.isdir(brown_path):
             files = [f for f in os.listdir(brown_path) if f.lower().endswith((".lbx", ".lbl"))]
             files = sorted(files, key=natural_key)
+            brown_row_index = 0  # row counter for brown fields
             for lbl_file in files:
                 row_frame = tk.Frame(brown_frame)
                 row_frame.pack(anchor="w", padx=2, pady=1.3)
@@ -439,13 +474,28 @@ def build_tabs():
                 entry.insert(0, "")
                 entry.pack(side="left")
 
-                entry.bind("<KeyRelease>", entry_update)
+                # Set navigation attributes for brown entries
+                entry.folder_path = folder_path
+                entry.row = brown_row_index
+                entry.col = 1  # brown column is 1
 
+                grid_entries[(folder_path, brown_row_index, 1)] = entry
+
+                # Bind arrow keys for navigation
+                entry.bind("<Up>", navigate_arrow)
+                entry.bind("<Down>", navigate_arrow)
+                entry.bind("<Left>", navigate_arrow)
+                entry.bind("<Right>", navigate_arrow)
+
+                entry.bind("<KeyRelease>", entry_update)
                 file_widgets[(folder_path, ("brown", lbl_file))] = (brown_path, entry)
+                brown_row_index += 1
         else:
             tk.Label(brown_frame, text="No 'brown' folder").pack(anchor="w")
 
-        # OTHER
+        # ---------------------------
+        # OTHER LABELS
+        # ---------------------------
         tk.Label(other_frame, text="OTHER (Panini) Labels", font=("Calibri", 10, "bold")).pack(anchor="w")
         other_path = os.path.join(folder_path, "other")
         if os.path.isdir(other_path):
@@ -460,9 +510,7 @@ def build_tabs():
                 entry = tk.Entry(row_frame, width=5)
                 entry.insert(0, "")
                 entry.pack(side="left")
-
                 entry.bind("<KeyRelease>", entry_update)
-
                 file_widgets[(folder_path, ("other", lbl_file))] = (other_path, entry)
         else:
             tk.Label(other_frame, text="No 'other' folder").pack(anchor="w")
@@ -472,10 +520,9 @@ def build_tabs():
 # ------------------------------------------------------------------------
 def main():
     global root, notebook, price_label, current_tab_total_label
-    
     root = tk.Tk()
     root.title("Butty Printer 3000")
-    root.geometry("550x810")  # Increased width to accommodate days frame
+    root.geometry("550x810")  # Adjust window size as needed
     
     # Create the Notebook
     notebook = ttk.Notebook(root)
@@ -485,33 +532,23 @@ def main():
     controls = tk.Frame(root)
     controls.grid(row=1, column=0, columnspan=3, sticky="ew")
     
-    # Price label
     price_label = tk.Label(controls, text=f"Current Price: {current_price}",
                            font=("Arial", 10, "bold"))
     price_label.pack(side="left", padx=5)
     
-    # Buttons
-    tk.Button(controls, text="Set Price", font="Calibri 14",
-              command=set_price).pack(side="left", padx=5, pady=3)
-    tk.Button(controls, text="Print Labels", font="Calibri 14",
-              command=print_labels).pack(side="left", padx=5, pady=3)
+    tk.Button(controls, text="Set Price", font="Calibri 14", command=set_price).pack(side="left", padx=5, pady=3)
+    tk.Button(controls, text="Print Labels", font="Calibri 14", command=print_labels).pack(side="left", padx=5, pady=3)
     
-    # A single label for the currently selected tab's total
-    current_tab_total_label = tk.Label(controls, text="Total: 0",
-                                       font=("Arial", 10, "bold"))
+    current_tab_total_label = tk.Label(controls, text="Total: 0", font=("Arial", 10, "bold"))
     current_tab_total_label.pack(side="left", padx=5)
     
-    # Make the main grid resizable
     root.columnconfigure(0, weight=1)
     root.rowconfigure(0, weight=1)
     
-    # Build the tabs
     build_tabs()
-    
-    # Bind event so that when we switch tabs, we update the price display and the tab total
     notebook.bind("<<NotebookTabChanged>>", on_tab_change)
     
-    # Center the window
+    # Center the window on the screen
     root.update_idletasks()
     window_width = root.winfo_width()
     window_height = root.winfo_height()
@@ -525,4 +562,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
