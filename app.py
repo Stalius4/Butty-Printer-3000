@@ -3,12 +3,14 @@ import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog
 import win32com.client
 import re
+import csv  # NEW: For CSV file reading
 
 # ------------------------------------------------------------------------
 # Global variables
 # ------------------------------------------------------------------------
 BASE_DIR = r"C:\Users\Deivydas\Desktop\components\labe"  # Replace with your actual path
 current_price = "£0.00"
+CSV_FILE = "Spalding_numbers.csv"  # NEW: Path to your CSV file
 
 # This dictionary maps the actual ttk.Frame object (each tab) to the folder path
 tab_folders = {}
@@ -284,6 +286,45 @@ def on_tab_change(event):
         update_tab_total_display(folder_path)
 
 # ------------------------------------------------------------------------
+# NEW: Populate entries from CSV when a day button is pressed
+# ------------------------------------------------------------------------
+def populate_day(day, folder_path):
+    """
+    Reads the CSV file (CSV_FILE) and, for the given folder (tab),
+    finds the matching row (by label name) and populates the white and brown
+    entries with the value from the column corresponding to the pressed day.
+    
+    The CSV file is expected to have a header:
+    Name,Monday white,Monday brown,Tuesday white,Tuesday brown,... etc.
+    """
+    data = {}
+    try:
+        with open(CSV_FILE, newline='', encoding='utf-8') as csvfile:
+            reader = csv.DictReader(csvfile)
+            for row in reader:
+                key = row["Name"].strip()
+                data[key] = row
+    except Exception as e:
+        messagebox.showerror("Error", f"Could not read CSV file: {e}")
+        return
+
+    # Loop through all file widgets in the current folder
+    for (fpath, key_tuple), (actual_subfolder, entry_widget) in file_widgets.items():
+        if fpath == folder_path:
+            folder_type, filename = key_tuple
+            # Only update white and brown labels (skip 'other')
+            if folder_type in ("white", "brown"):
+                base_name = os.path.splitext(filename)[0]
+                if base_name in data:
+                    csv_row = data[base_name]
+                    # Determine the correct column name based on the day and label type
+                    col_name = f"{day} {folder_type}"  # e.g., "Monday white"
+                    value = csv_row.get(col_name, "")
+                    entry_widget.delete(0, tk.END)
+                    entry_widget.insert(0, value)
+    update_tab_total_display(folder_path)
+
+# ------------------------------------------------------------------------
 # Build Tabs
 # ------------------------------------------------------------------------
 def build_tabs():
@@ -329,10 +370,12 @@ def build_tabs():
         days_frame = tk.Frame(folder_tab, padx=5, pady=5)
         days_frame.grid(row=0, column=2, sticky="nsew")
 
-        # Add day buttons to the days_frame
+        # Add day buttons to the days_frame with a command to populate CSV data
         days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
         for day in days:
-            btn = tk.Button(days_frame, text=day, width=12)
+            # Using a lambda with default arguments to capture the current day and folder_path
+            btn = tk.Button(days_frame, text=day, width=12,
+                            command=lambda d=day, fp=folder_path: populate_day(d, fp))
             btn.pack(side="top", fill="x", pady=2)
 
         # Configure the canvas to update scroll region
@@ -482,3 +525,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
