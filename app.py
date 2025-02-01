@@ -5,6 +5,7 @@ import win32com.client
 import re
 import csv
 from ttkthemes import ThemedTk
+
 # ------------------------------------------------------------------------
 # Global variables
 # ------------------------------------------------------------------------
@@ -347,11 +348,20 @@ def navigate_arrow(event):
         target.focus_set()
 
 # ------------------------------------------------------------------------
-# Mouse Wheel Scroll Handler
+# Global mouse wheel handler for scrolling the active tab's canvas
 # ------------------------------------------------------------------------
-def _on_mousewheel(event, canvas):
-    """Scroll the canvas vertically on mouse wheel events."""
-    canvas.yview_scroll(-1 * int(event.delta / 120), "units")
+def on_global_mousewheel(event):
+    # Get the currently selected tab from the notebook
+    current_tab_name = notebook.select()
+    current_tab = notebook.nametowidget(current_tab_name)
+    # Look for the canvas in the active tab
+    canvas = None
+    for child in current_tab.winfo_children():
+        if isinstance(child, tk.Canvas):
+            canvas = child
+            break
+    if canvas:
+        canvas.yview_scroll(-1 * int(event.delta / 120), "units")
 
 # ------------------------------------------------------------------------
 # Build Tabs
@@ -378,7 +388,7 @@ def build_tabs():
         folder_tab.grid_columnconfigure(2, weight=0)  # Days frame column
 
         # Create a canvas and scrollbar
-        canvas = tk.Canvas(folder_tab)
+        canvas = tk.Canvas(folder_tab, bd=0, highlightthickness=0, relief='flat')
         scrollbar = ttk.Scrollbar(folder_tab, orient="vertical", command=canvas.yview)
         scrollable_frame = ttk.Frame(canvas)
 
@@ -390,9 +400,7 @@ def build_tabs():
         canvas.grid(row=0, column=0, sticky="nsew")
         scrollbar.grid(row=0, column=1, sticky="ns")
 
-        # Bind mouse wheel scrolling to canvas when the mouse is over it
-        canvas.bind("<Enter>", lambda e, c=canvas: c.bind_all("<MouseWheel>", lambda event: _on_mousewheel(event, c)))
-        canvas.bind("<Leave>", lambda e, c=canvas: c.unbind_all("<MouseWheel>"))
+        # (Per-canvas mouse wheel bindings removed in favor of a global binding)
 
         # Create days frame on the right side of the tab
         days_frame = tk.Frame(folder_tab, padx=5, pady=5)
@@ -402,7 +410,7 @@ def build_tabs():
         days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Reset"]
         for day in days:
             btn = ttk.Button(days_frame, text=day, width=12,
-                            command=lambda d=day, fp=folder_path: populate_day(d, fp))
+                             command=lambda d=day, fp=folder_path: populate_day(d, fp))
             btn.pack(side="top", fill="x", pady=2)
 
         # Configure the canvas to update scroll region
@@ -507,17 +515,18 @@ def build_tabs():
         # ---------------------------
         # OTHER LABELS
         # ---------------------------
-        tk.Label(other_frame, text="OTHER (Panini) Labels", font=("Calibri", 10, "bold")).pack(anchor="w")
+        tk.Label(other_frame, text="Panini's", font=("Calibri", 10, "bold")).pack(anchor="w",padx=30)
         other_path = os.path.join(folder_path, "other")
         if os.path.isdir(other_path):
             files = [f for f in os.listdir(other_path) if f.lower().endswith((".lbx", ".lbl"))]
             for lbl_file in files:
                 row_frame = tk.Frame(other_frame)
-                row_frame.pack(anchor="w", padx=2)
+                row_frame.pack(anchor="w", padx=30)
 
+                bottom_border = tk.Frame(row_frame, bg="grey", height=0.5)
+                bottom_border.pack(fill="x", side="bottom")
                 tk.Label(row_frame, text=os.path.splitext(lbl_file)[0],
                          width=15, anchor="w").pack(side="left")
-
                 entry = ttk.Entry(row_frame, width=3)
                 entry.insert(0, "")
                 entry.pack(side="left")
@@ -531,9 +540,8 @@ def build_tabs():
 # ------------------------------------------------------------------------
 def main():
     global root, notebook, price_label, current_tab_total_label
-    # Import and use ThemedTk from ttkthemes
-   
-    root = ThemedTk(theme="clearlooks")  # Change "arc" to your preferred theme
+    # Create the themed root window
+    root = ThemedTk(theme="clearlooks")  # Change "clearlooks" to your preferred theme
     root.title("Butty Printer 3000")
     root.geometry("550x810")  # Adjust window size as needed
 
@@ -545,22 +553,24 @@ def main():
     controls = tk.Frame(root)
     controls.grid(row=1, column=0, columnspan=3, sticky="ew")
 
-    # You can also change tk.Label/tk.Button to ttk versions if desired:
+
+    ttk.Button(controls, text="Set Price", command=set_price).pack(side="left", padx=5, pady=3)
     price_label = ttk.Label(controls, text=f"Current Price: {current_price}",
                             font=("Arial", 10, "bold"))
     price_label.pack(side="left", padx=5)
-
-    ttk.Button(controls, text="Set Price", command=set_price).pack(side="left", padx=5, pady=3)
-    ttk.Button(controls, text="Print Labels", command=print_labels).pack(side="left", padx=5, pady=3)
+    ttk.Button(controls, text="Print Labels", command=print_labels).pack(side="right", padx=15, pady=3,)
 
     current_tab_total_label = ttk.Label(controls, text="Total: 0", font=("Arial", 10, "bold"))
-    current_tab_total_label.pack(side="left", padx=5)
+    current_tab_total_label.pack(side="right", padx=5)
 
     root.columnconfigure(0, weight=1)
     root.rowconfigure(0, weight=1)
 
     build_tabs()
     notebook.bind("<<NotebookTabChanged>>", on_tab_change)
+
+    # Global binding for mouse wheel scrolling
+    root.bind_all("<MouseWheel>", on_global_mousewheel)
 
     # Center the window on the screen
     root.update_idletasks()
@@ -573,7 +583,6 @@ def main():
     root.geometry(f"+{x}+{y}")
 
     root.mainloop()
-
 
 if __name__ == "__main__":
     main()
