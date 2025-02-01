@@ -347,6 +347,13 @@ def navigate_arrow(event):
         target.focus_set()
 
 # ------------------------------------------------------------------------
+# Mouse Wheel Scroll Handler
+# ------------------------------------------------------------------------
+def _on_mousewheel(event, canvas):
+    """Scroll the canvas vertically on mouse wheel events."""
+    canvas.yview_scroll(-1 * int(event.delta / 120), "units")
+
+# ------------------------------------------------------------------------
 # Build Tabs
 # ------------------------------------------------------------------------
 def build_tabs():
@@ -382,6 +389,10 @@ def build_tabs():
         # Place canvas and scrollbar using grid
         canvas.grid(row=0, column=0, sticky="nsew")
         scrollbar.grid(row=0, column=1, sticky="ns")
+
+        # Bind mouse wheel scrolling to canvas when the mouse is over it
+        canvas.bind("<Enter>", lambda e, c=canvas: c.bind_all("<MouseWheel>", lambda event: _on_mousewheel(event, c)))
+        canvas.bind("<Leave>", lambda e, c=canvas: c.unbind_all("<MouseWheel>"))
 
         # Create days frame on the right side of the tab
         days_frame = tk.Frame(folder_tab, padx=5, pady=5)
